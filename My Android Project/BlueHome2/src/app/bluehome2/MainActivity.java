@@ -7,7 +7,6 @@ import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.StringTokenizer;
 
 import android.app.Activity;
@@ -50,6 +49,9 @@ public class MainActivity extends Activity {
 	private DataOutputStream output;
 	private InetAddress address = null;
 
+	// Telephony object
+	TelephonyManager mgr = null;
+
 	// Local Bluetooth adapter
 	private static BluetoothAdapter mBluetoothAdapter = null;
 
@@ -67,6 +69,8 @@ public class MainActivity extends Activity {
 	private static ToggleButton mToggleOne, mToggleTwo, mToggleDoor;
 
 	private static ProgressDialog mProgress;
+
+	private boolean isThisFirstTimeRunning = true;
 
 	// Communication Way : WIFI or BT
 	private static int CommWay;
@@ -89,13 +93,12 @@ public class MainActivity extends Activity {
 	private final static int KJS = 1;
 	private final static int JTH = 2;
 	private final static int JSA = 3;
-	private final static int EXT = 4;
 
 	// Device ID for each family members
-	private final static String IDJKC = "352787040927788"; // defy id
-	private final static String IDKJS = "357490048542171"; // vega racer id
-	private final static String IDJTH = "354636031262069"; // motoroi id
-	private final static String IDJSA = "353964051983351"; // optimus vu II id
+	// private final static String IDJKC = "352787040927788"; // defy id
+	// private final static String IDKJS = "357490048542171"; // vega racer id
+	// private final static String IDJTH = "354636031262069"; // motoroi id
+	// private final static String IDJSA = "353964051983351"; // optimus vu II
 
 	// Status for both read and write
 	// Message types sent from the BluetoothConnectionService Handler
@@ -116,6 +119,9 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+
+		Log.d(TAG, "+ ON CREATE +");
+
 		// Set up the window layout
 		requestWindowFeature(Window.FEATURE_CUSTOM_TITLE);
 		setContentView(R.layout.activity_main);
@@ -156,70 +162,94 @@ public class MainActivity extends Activity {
 		// false means this method is not called from android menu.
 		CreateCommWayDialog(false);
 
+		// define telephony object
+		mgr = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
+
 	}
 
 	@Override
 	protected void onStart() {
 		super.onStart();
 
-		/*
-		 * if (getDeviceId().equals(IDJKC)) { ID = JKC; // ThisDeviceId = IDJKC;
-		 * } else if (getDeviceId().equals(IDKJS)) { ID = KJS; // ThisDeviceId =
-		 * IDKJS; } else if (getDeviceId().equals(IDJTH)) { ID = JTH; //
-		 * ThisDeviceId = IDJTH; } else if (getDeviceId().equals(IDJSA)) { ID =
-		 * JSA; // ThisDeviceId = IDJSA; } else { ID = EXT; // temporary master
-		 * access key for HTC Wildfire phone. // updated on 20130715. please
-		 * delete following line when properly // setup the system. ThisDeviceId
-		 * = "354636031262069"; }
-		 */
+		Log.d(TAG, "+ ON START +");
 
-		// temporarily acquired master access key for HTC Wildfire phone.
-		// updated on 20130715. please delete following two line when properly
-		// setup the system.
-		// on 20130802, since dad got changed his phone from motorola defy to
-		// sky vega lte,
-		// one more tentative modification has been made to ID and ThisDeviceId
-		// variable.
-		// on20130817, since I bought secondhand phone Galaxy S3, I have made my
-		// own version.
-		ID = JTH;
-		ThisDeviceId = "354636031262069";
+		if (isThisFirstTimeRunning) {
+			/*
+			 * if (getDeviceId().equals(IDJKC)) { ID = JKC; // ThisDeviceId =
+			 * IDJKC; } else if (getDeviceId().equals(IDKJS)) { ID = KJS; //
+			 * ThisDeviceId = IDKJS; } else if (getDeviceId().equals(IDJTH)) {
+			 * ID = JTH; // ThisDeviceId = IDJTH; } else if
+			 * (getDeviceId().equals(IDJSA)) { ID = JSA; // ThisDeviceId =
+			 * IDJSA; } else { ID = EXT; // temporary master access key for HTC
+			 * Wildfire phone. // updated on 20130715. please delete following
+			 * line when properly // setup the system. ThisDeviceId =
+			 * "354636031262069"; }
+			 */
 
-		// only when commway is wifi and network is available
-		if (CommWay == WIFI && isNetworkAvailable()) {
-			// Initial connection
-			mProgress = ProgressDialog.show(MainActivity.this, "와이파이 연결중", "연결되는 동안 잠시만 기다려 주세요.");
-			// Initiate WIFIThread
-			WIFIThread.start();
-		} else if (CommWay == BT) {
-			// If BT is not on, request that it be enabled.
-			// setupConnection() will then be called during onActivityResult
-			if (!mBluetoothAdapter.isEnabled()) {
-				Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-				startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
-				// Otherwise, setup the connection session
-			} else {
-				// sometimes it won't stopped from last execution.
-				if (mConService != null) {
-					mConService.stop();
+			// temporarily acquired master access key for HTC Wildfire phone.
+			// updated on 20130715. please delete following two line when
+			// properly
+			// setup the system.
+			// on 20130802, since dad got changed his phone from motorola defy
+			// to
+			// sky vega lte,
+			// one more tentative modification has been made to ID and
+			// ThisDeviceId
+			// variable.
+			// on20130817, since I bought secondhand phone Galaxy S3, I have
+			// made my
+			// own version.
+			ID = JTH;
+			ThisDeviceId = "354636031262069";
+
+			// only when commway is wifi and network is available
+			if (CommWay == WIFI && isNetworkAvailable()) {
+				// Initial connection
+				mProgress = ProgressDialog.show(MainActivity.this, "와이파이 연결중", "연결되는 동안 잠시만 기다려 주세요.");
+				// Initiate WIFIThread
+				WIFIThread.start();
+			} else if (CommWay == BT) {
+				// If BT is not on, request that it be enabled.
+				// setupConnection() will then be called during onActivityResult
+				if (!mBluetoothAdapter.isEnabled()) {
+					Intent enableIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+					startActivityForResult(enableIntent, REQUEST_ENABLE_BT);
+					// Otherwise, setup the connection session
+				} else {
+					// sometimes it won't stopped from last execution.
+					if (mConService != null) {
+						mConService.stop();
+					}
+
+					setupConnection();
 				}
-
-				setupConnection();
 			}
 		}
-
-		Log.d(TAG, "onStart() called");
 	}
 
 	@Override
 	protected void onResume() {
 		super.onResume();
+
 		Log.d(TAG, "+ ON RESUME +");
 	}
 
 	@Override
 	protected void onStop() {
 		super.onStop();
+
+		Log.d(TAG, "+ ON STOP +");
+
+		// let system know this is not the first time ran this app.
+		isThisFirstTimeRunning = false;
+	}
+
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+
+		Log.d(TAG, "+ ON DESTROY +");
+
 		if (CommWay == WIFI) {
 			close();
 		} else if (CommWay == BT) {
@@ -227,11 +257,7 @@ public class MainActivity extends Activity {
 			if (mConService != null)
 				mConService.stop();
 		}
-	}
 
-	@Override
-	protected void onDestroy() {
-		super.onDestroy();
 		Toast.makeText(getApplication(), "앱을 종료합니다.\n편리한 기술 블루홈", Toast.LENGTH_SHORT).show();
 	}
 
@@ -244,10 +270,21 @@ public class MainActivity extends Activity {
 
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getOrder()) {
-		case 100:
+		switch (item.getItemId()) {
+		case R.id.menu_settings:
 			// called from android menu
 			CreateCommWayDialog(true);
+			break;
+		case R.id.phoneInfo:
+			new AlertDialog.Builder(MainActivity.this, AlertDialog.THEME_HOLO_DARK)
+					.setTitle("단말기 정보")
+					.setMessage(
+							"기기ID : " + getDeviceId() + "\r\n기기 전화번호 : " + getPhoneNumber() + "\r\nSIM 시리얼번호 : " + mgr.getSimSerialNumber())
+					.setIcon(R.drawable.ic_launcher).setCancelable(false).setPositiveButton("확인", new DialogInterface.OnClickListener() {
+						public void onClick(DialogInterface dialog, int whichButton) {
+							// 확인 버튼 클릭시에 실행 할 코드
+						}
+					}).show();
 			break;
 		}
 		return false;
@@ -317,17 +354,8 @@ public class MainActivity extends Activity {
 				socket = new Socket(SERVER_IP, SERVER_PORT);
 				input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 				output = new DataOutputStream(socket.getOutputStream());
-			} catch (UnknownHostException e) {
-				Log.e(TAG, "UnknownHostException : " + e.getMessage());
-				new AlertDialog.Builder(MainActivity.this).setTitle("오류메세지").setMessage("지태호한테 보여주세요\r\n" + e.getLocalizedMessage())
-						.setIcon(R.drawable.ic_launcher).setCancelable(false)
-						.setPositiveButton("확인", new DialogInterface.OnClickListener() {
-							public void onClick(DialogInterface dialog, int whichButton) {
-								// 확인 버튼 클릭시에 실행 할 코드
-							}
-						}).show();
-			} catch (IOException e) {
-				Log.e(TAG, "IOException : " + e.getMessage());
+			} catch (Exception e) {
+				Log.e(TAG, "Exception : " + e.getMessage());
 				new AlertDialog.Builder(MainActivity.this).setTitle("오류메세지").setMessage("지태호한테 보여주세요\r\n" + e.getLocalizedMessage())
 						.setIcon(R.drawable.ic_launcher).setCancelable(false)
 						.setPositiveButton("확인", new DialogInterface.OnClickListener() {
@@ -341,10 +369,11 @@ public class MainActivity extends Activity {
 					read.start();
 					// send greeting message
 					write("GREETINGS\n");
-					Thread.sleep(100);
+					Thread.sleep(500);
 					write("CURRENTSTATUS\n");
 					mProgress.dismiss();
-				} catch (InterruptedException e) {
+				} catch (Exception e) {
+					Log.e(TAG, "Exception : " + e.getMessage());
 					new AlertDialog.Builder(MainActivity.this).setTitle("오류메세지").setMessage("지태호한테 보여주세요\r\n" + e.getLocalizedMessage())
 							.setIcon(R.drawable.ic_launcher).setCancelable(false)
 							.setPositiveButton("확인", new DialogInterface.OnClickListener() {
@@ -363,17 +392,18 @@ public class MainActivity extends Activity {
 			super.run();
 
 			try {
-				try {
-					Thread.sleep(200);
-				} catch (Exception e) {
-					Log.e(TAG, "Thread.sleep Exception");
-				}
 				String result;
 				while ((result = input.readLine()) != null) {
 					mHandler.obtainMessage(MainActivity.MESSAGE_READ, result).sendToTarget();
 				}
 			} catch (IOException e) {
 				e.getMessage();
+			} finally {
+				try {
+					Thread.sleep(200);
+				} catch (Exception e) {
+					Log.e(TAG, "Thread.sleep Exception");
+				}
 			}
 		}
 	};
@@ -395,18 +425,18 @@ public class MainActivity extends Activity {
 					output.writeBytes(ThisDeviceId + ":");
 					break;
 				}
-			} catch (IOException e) {
-				Log.e(TAG, "IOException : " + e.getMessage() + " at write()");
+			} catch (Exception e) {
+				Log.e(TAG, "Exception : " + e.getMessage() + " at write()");
 			} finally {
 				try {
 					output.writeBytes(msg);
 					output.flush();
 				} catch (Exception e) {
-					Log.e(TAG, "IOException : " + e.getMessage() + " at write() finally");
+					Log.e(TAG, "Exception : " + e.getMessage() + " at write() finally");
 				}
 			}
 		} else {
-			Toast.makeText(getBaseContext(), "Host is not answering or\nConnection is closed.", Toast.LENGTH_LONG).show();
+			Toast.makeText(getBaseContext(), "socket.isClosed() is not false", Toast.LENGTH_LONG).show();
 		}
 	}
 
@@ -420,8 +450,8 @@ public class MainActivity extends Activity {
 				socket.close();
 				input.close();
 				output.close();
-			} catch (IOException e) {
-				Log.e(TAG, "cancel() failed");
+			} catch (Exception e) {
+				Log.e(TAG, "close() failed");
 				Toast.makeText(getBaseContext(), e.getLocalizedMessage(), Toast.LENGTH_LONG).show();
 			}
 		}
@@ -535,7 +565,7 @@ public class MainActivity extends Activity {
 			} else if (delimiter.equals("HELLO TAEHO")) {
 				mTitle.setText("안녕하세요. 지종대왕님");
 			} else if (delimiter.equals("HELLO SUN")) {
-				mTitle.setText("비운의 여왕 지덕여왕, 감히 블루홈을 쓰려고 하다니!");
+				mTitle.setText("안녕 선아? 하와유?");
 			}
 
 		} else if (StringToParse.length == 4) {
@@ -622,7 +652,7 @@ public class MainActivity extends Activity {
 		final SharedPreferences settings = getSharedPreferences("firstAccess", MODE_PRIVATE);
 		/* check if the application is launched for the first time */
 		if (settings.getBoolean("firstAccess", false) == false || calledFromMenu) {
-			new AlertDialog.Builder(MainActivity.this).setTitle("연결방식을 선택하세요.").setIcon(R.drawable.commway)
+			new AlertDialog.Builder(MainActivity.this, AlertDialog.THEME_HOLO_DARK).setTitle("연결방식을 선택하세요.").setIcon(R.drawable.commway)
 					.setSingleChoiceItems(R.array.commway, CommWay, new DialogInterface.OnClickListener() {
 						@Override
 						public void onClick(DialogInterface dialog, int which) {
@@ -738,13 +768,11 @@ public class MainActivity extends Activity {
 
 	// retrieve device number
 	public String getPhoneNumber() {
-		TelephonyManager mgr = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
 		return mgr.getLine1Number();
 	}
 
 	// retrieve device id
 	public String getDeviceId() {
-		TelephonyManager mgr = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
 		return mgr.getDeviceId();
 	}
 
